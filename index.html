@@ -25,6 +25,19 @@
         /* Date Divider */
         .date-divider { margin: 16px 0; display: flex; justify-content: center; position: relative; }
         .date-badge { background: #ffffff; color: #54656f; font-size: 11.5px; padding: 6px 14px; border-radius: 8px; text-transform: uppercase; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); font-weight: 500; }
+        
+        /* Interactive Elements */
+        .download-overlay { 
+            background: linear-gradient(transparent, rgba(0,0,0,0.4));
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        .image-wrapper:hover .download-overlay { opacity: 1; }
+        
+        .bezel-download {
+            transition: transform 0.1s ease;
+        }
+        .bezel-download:active { transform: scale(0.9); }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden">
@@ -40,9 +53,6 @@
                     Initializing...
                 </div>
             </div>
-        </div>
-        <div class="flex items-center gap-4">
-            <!-- Header actions (if any) -->
         </div>
     </header>
 
@@ -200,21 +210,38 @@
                 contentHtml = `
                     <div class="flex justify-between items-center mb-1 border-b border-gray-100 pb-1">
                         <span class="text-[10px] text-blue-500 font-bold uppercase">Code Snippet</span>
-                        <button onclick="copyToClipboard(this)" class="text-[10px] text-gray-400 hover:text-blue-600 px-1">Copy</button>
+                        <div class="flex gap-2">
+                            <button onclick="copyToClipboard(this)" class="text-[10px] text-gray-400 hover:text-blue-600 px-1">Copy</button>
+                        </div>
                     </div>
                     <pre class="text-[13px] text-gray-800 leading-tight font-mono">${escapeHtml(item.content)}</pre>
                 `;
             } else {
                 contentHtml = `
-                    <img src="${item.content}" class="rounded-lg max-w-full h-auto border border-gray-100 cursor-pointer" onclick="window.open('${item.content}')">
+                    <div class="image-wrapper relative group overflow-hidden rounded-lg">
+                        <img src="${item.content}" class="max-w-full h-auto border border-gray-100 cursor-pointer block" onclick="window.open('${item.content}')">
+                        
+                        <!-- Bezel Download Button Overlay -->
+                        <div class="download-overlay absolute inset-0 flex items-end justify-end p-2">
+                             <button onclick="event.stopPropagation(); downloadImage('${item.content}', 'image-${item.id}.png')" 
+                                     class="bezel-download bg-white/90 hover:bg-white text-gray-800 p-2 rounded-full shadow-lg border border-gray-200" 
+                                     title="Download Image">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
                 `;
             }
 
             row.innerHTML = `
-                <div class="bubble-in max-w-[85%] md:max-w-[70%] p-2 pb-1 pr-3">
-                    ${contentHtml}
-                    <div class="flex items-center justify-end gap-2 mt-1">
-                        <div class="text-[10px] text-gray-400 leading-none">${time}</div>
+                <div class="flex items-end w-full">
+                    <div class="bubble-in max-w-[85%] md:max-w-[70%] p-2 pb-1 pr-3">
+                        ${contentHtml}
+                        <div class="flex items-center justify-end gap-2 mt-1">
+                            <div class="text-[10px] text-gray-400 leading-none">${time}</div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -243,6 +270,23 @@
             document.body.removeChild(el);
             btn.innerText = "Done!";
             setTimeout(() => btn.innerText = "Copy", 2000);
+        }
+
+        async function downloadImage(url, filename) {
+            try {
+                const response = await fetch(url);
+                const blob = await response.blob();
+                const blobUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(blobUrl);
+                document.body.removeChild(a);
+            } catch (err) {
+                window.open(url, '_blank');
+            }
         }
     </script>
 </body>
