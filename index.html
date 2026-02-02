@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AL Dev Porter - Chat</title>
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.1/dist/umd/supabase.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #f0f2f5; }
+        .chat-bg { background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-blend-mode: overlay; background-color: #efeae2; }
+        pre { white-space: pre-wrap; word-break: break-all; font-family: 'Consolas', 'Monaco', monospace; }
+        .fade-in { animation: fadeIn 0.2s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #ced0d1; border-radius: 10px; }
+        
+        /* WhatsApp Bubbles */
+        .bubble-in { background: white; border-radius: 0 12px 12px 12px; position: relative; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); }
+        .bubble-in::before { content: ''; position: absolute; left: -8px; top: 0; border-width: 0 8px 10px 0; border-color: transparent white transparent transparent; }
+
+        /* Date Divider */
+        .date-divider { margin: 16px 0; display: flex; justify-content: center; position: relative; }
+        .date-badge { background: #ffffff; color: #54656f; font-size: 11.5px; padding: 6px 14px; border-radius: 8px; text-transform: uppercase; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); font-weight: 500; }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+    
+    <!-- Header -->
+    <header class="bg-[#f0f2f5] border-b border-gray-300 px-4 py-2 flex items-center justify-between z-10">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-[#002855] rounded-full flex items-center justify-center text-white font-bold shadow-sm">AL</div>
+            <div>
+                <h1 class="font-semibold text-gray-800 text-sm">Project Porter (Live Sync)</h1>
+                <div id="status" class="text-[11px] text-gray-500 flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                    Initializing...
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <!-- Header actions (if any) -->
+        </div>
+    </header>
+
+    <!-- Main Chat Area -->
+    <main class="flex-1 overflow-y-auto chat-bg p-4 md:px-20 lg:px-40" id="chat-container">
+        <div class="flex flex-col gap-4" id="feed">
+            <div id="empty-state" class="flex flex-col items-center justify-center py-20 text-gray-500">
+                <div class="bg-white/80 px-4 py-1 rounded-full text-xs shadow-sm mb-4 uppercase">Messages are transient within this network</div>
+                <p class="text-sm italic">Waiting for snippets or images...</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Input Bar -->
+    <footer class="bg-[#f0f2f5] p-3 border-t border-gray-300">
+        <div class="max-w-5xl mx-auto flex items-end gap-3">
+            <label class="p-2 text-gray-600 hover:bg-gray-200 rounded-full cursor-pointer transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+                <input type="file" id="image-input" class="hidden" accept="image/*" onchange="uploadImage(this)">
+            </label>
+
+            <div class="flex-1 relative">
+                <textarea id="code-input" rows="1" 
+                    class="w-full bg-white border-none rounded-xl px-4 py-3 text-sm focus:ring-0 focus:outline-none shadow-sm resize-none" 
+                    placeholder="Paste code or type a message..."
+                    oninput="this.style.height = '';this.style.height = Math.min(this.scrollHeight, 200) + 'px'"></textarea>
+            </div>
+
+            <button id="send-btn" onclick="sendContent()" class="bg-[#00a884] hover:bg-[#008f72] text-white p-3 rounded-full shadow-md transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 transform rotate-90" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            </button>
+        </div>
+    </footer>
+
+    <script>
+        const SUPABASE_URL = "https://etxmghkzowbxcfzzclbq.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0eG1naGt6b3dieGNmenpjbGJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5ODA4MTQsImV4cCI6MjA4NTU1NjgxNH0.fpjy7Ct5kGFa1YruRSDfTamRMIRRjIvHtQQ1s2V9Wzs";
+        const BUCKET_NAME = "Shares";
+
+        let supabase;
+        let lastRenderedDate = null; 
+
+        function startApp() {
+            try {
+                const lib = window.supabase;
+                if (!lib || !lib.createClient) {
+                    setTimeout(startApp, 200);
+                    return;
+                }
+                supabase = lib.createClient(SUPABASE_URL, SUPABASE_KEY);
+                if (supabase) {
+                    updateStatus("online", "green");
+                    fetchInitialData();
+                    subscribeRealtime();
+                }
+            } catch (err) {
+                updateStatus("offline", "red");
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', startApp);
+
+        function updateStatus(text, color) {
+            const statusEl = document.getElementById('status');
+            if (!statusEl) return;
+            statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-${color}-500"></span> ${text}`;
+        }
+
+        async function fetchInitialData() {
+            if (!supabase) return;
+            const { data, error } = await supabase.from('share_data').select('*').order('created_at', { ascending: true }).limit(200);
+            if (!error && data) {
+                const feed = document.getElementById('feed');
+                const empty = document.getElementById('empty-state');
+                if(data.length > 0 && empty) empty.remove();
+                data.forEach(item => renderItem(item));
+                scrollToBottom();
+            }
+        }
+
+        function subscribeRealtime() {
+            if (!supabase) return;
+            supabase.channel('porter-sync').on('postgres_changes', { event: '*', schema: 'public', table: 'share_data' }, payload => {
+                if (payload.eventType === 'INSERT') {
+                    const empty = document.getElementById('empty-state');
+                    if(empty) empty.remove();
+                    renderItem(payload.new);
+                    scrollToBottom();
+                } else if (payload.eventType === 'DELETE') {
+                    location.reload();
+                }
+            }).subscribe();
+        }
+
+        async function sendContent() {
+            const input = document.getElementById('code-input');
+            const content = input.value;
+            if(!content.trim() || !supabase) return;
+
+            const { error } = await supabase.from('share_data').insert([{ content, type: 'code' }]);
+            if(!error) {
+                input.value = '';
+                input.style.height = 'auto';
+            }
+        }
+
+        async function uploadImage(input) {
+            if (!input.files || input.files.length === 0 || !supabase) return;
+            const file = input.files[0];
+            const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+
+            try {
+                const { error: uploadError } = await supabase.storage.from(BUCKET_NAME).upload(fileName, file);
+                if (uploadError) return;
+                const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
+                await supabase.from('share_data').insert([{ content: data.publicUrl, type: 'image' }]);
+            } catch (err) {}
+        }
+
+        function formatHeaderDate(date) {
+            const today = new Date();
+            const yesterday = new Date();
+            yesterday.setDate(today.getDate() - 1);
+
+            if (date.toDateString() === today.toDateString()) return "Today";
+            if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+            
+            return date.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        }
+
+        function renderItem(item) {
+            const feed = document.getElementById('feed');
+            if (!feed || document.getElementById(`item-${item.id}`)) return;
+
+            const msgDate = new Date(item.created_at);
+            const dateKey = msgDate.toDateString();
+
+            if (lastRenderedDate !== dateKey) {
+                const divider = document.createElement('div');
+                divider.className = "date-divider";
+                divider.innerHTML = `<span class="date-badge">${formatHeaderDate(msgDate)}</span>`;
+                feed.appendChild(divider);
+                lastRenderedDate = dateKey;
+            }
+
+            const row = document.createElement('div');
+            row.id = `item-${item.id}`;
+            row.className = "fade-in flex flex-col items-start w-full mb-2";
+            
+            const time = msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            let contentHtml = '';
+
+            if(item.type === 'code') {
+                contentHtml = `
+                    <div class="flex justify-between items-center mb-1 border-b border-gray-100 pb-1">
+                        <span class="text-[10px] text-blue-500 font-bold uppercase">Code Snippet</span>
+                        <button onclick="copyToClipboard(this)" class="text-[10px] text-gray-400 hover:text-blue-600 px-1">Copy</button>
+                    </div>
+                    <pre class="text-[13px] text-gray-800 leading-tight font-mono">${escapeHtml(item.content)}</pre>
+                `;
+            } else {
+                contentHtml = `
+                    <img src="${item.content}" class="rounded-lg max-w-full h-auto border border-gray-100 cursor-pointer" onclick="window.open('${item.content}')">
+                `;
+            }
+
+            row.innerHTML = `
+                <div class="bubble-in max-w-[85%] md:max-w-[70%] p-2 pb-1 pr-3">
+                    ${contentHtml}
+                    <div class="flex items-center justify-end gap-2 mt-1">
+                        <div class="text-[10px] text-gray-400 leading-none">${time}</div>
+                    </div>
+                </div>
+            `;
+
+            feed.appendChild(row);
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('chat-container');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function copyToClipboard(btn) {
+            const text = btn.closest('.bubble-in').querySelector('pre').innerText;
+            const el = document.createElement('textarea');
+            el.value = text;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            btn.innerText = "Done!";
+            setTimeout(() => btn.innerText = "Copy", 2000);
+        }
+    </script>
+</body>
+</html>
