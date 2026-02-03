@@ -38,6 +38,21 @@
             transition: transform 0.1s ease;
         }
         .bezel-download:active { transform: scale(0.9); }
+
+        /* Preview Area */
+        #preview-container {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 12px;
+            border-top: 1px solid #e5e7eb;
+            box-shadow: 0 -4px 6px -1px rgba(0,0,0,0.05);
+            border-radius: 12px 12px 0 0;
+            z-index: 20;
+        }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden">
@@ -61,28 +76,40 @@
         <div class="flex flex-col gap-4" id="feed">
             <div id="empty-state" class="flex flex-col items-center justify-center py-20 text-gray-500">
                 <div class="bg-white/80 px-4 py-1 rounded-full text-xs shadow-sm mb-4 uppercase">Messages are transient within this network</div>
-                <p class="text-sm italic">Waiting for snippets or images...</p>
+                <p class="text-sm italic">Paste an image or snippet to share...</p>
             </div>
         </div>
     </main>
 
     <!-- Input Bar -->
-    <footer class="bg-[#f0f2f5] p-3 border-t border-gray-300">
+    <footer class="bg-[#f0f2f5] p-3 border-t border-gray-300 relative">
+        <!-- Image Preview Area -->
+        <div id="preview-container" class="flex items-center gap-4">
+            <div class="relative w-20 h-20 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
+                <img id="image-preview" src="" class="w-full h-full object-cover">
+                <button onclick="clearPendingImage()" class="absolute top-0 right-0 bg-red-500 text-white rounded-bl-lg p-1 hover:bg-red-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+            </div>
+            <div class="text-xs text-gray-500 italic" id="preview-filename">image_to_upload.png</div>
+        </div>
+
         <div class="max-w-5xl mx-auto flex items-end gap-3">
             <label class="p-2 text-gray-600 hover:bg-gray-200 rounded-full cursor-pointer transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
-                <input type="file" id="image-input" class="hidden" accept="image/*" onchange="uploadImage(this)">
+                <input type="file" id="image-input" class="hidden" accept="image/*" onchange="handleFileSelect(this.files[0])">
             </label>
 
             <div class="flex-1 relative">
                 <textarea id="code-input" rows="1" 
-                    class="w-full bg-white border-none rounded-xl px-4 py-3 text-sm focus:ring-0 focus:outline-none shadow-sm resize-none" 
-                    placeholder="Paste code or type a message..."
+                    class="w-full bg-white border-none rounded-xl px-4 py-3 text-sm focus:ring-0 focus:outline-none shadow-sm resize-none transition-all" 
+                    placeholder="Paste code or image here..."
+                    onkeydown="handleKeyDown(event)"
                     oninput="this.style.height = '';this.style.height = Math.min(this.scrollHeight, 200) + 'px'"></textarea>
             </div>
 
-            <button id="send-btn" onclick="sendContent()" class="bg-[#00a884] hover:bg-[#008f72] text-white p-3 rounded-full shadow-md transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 transform rotate-90" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            <button id="send-btn" onclick="handleSend()" class="bg-[#00a884] hover:bg-[#008f72] text-white p-3 rounded-full shadow-md transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
             </button>
         </div>
     </footer>
@@ -94,6 +121,7 @@
 
         let supabase;
         let lastRenderedDate = null; 
+        let pendingImageBlob = null; 
 
         function startApp() {
             try {
@@ -107,6 +135,7 @@
                     updateStatus("online", "green");
                     fetchInitialData();
                     subscribeRealtime();
+                    setupPasteListener();
                 }
             } catch (err) {
                 updateStatus("offline", "red");
@@ -147,22 +176,80 @@
             }).subscribe();
         }
 
-        async function sendContent() {
-            const input = document.getElementById('code-input');
-            const content = input.value;
-            if(!content.trim() || !supabase) return;
-
-            const { error } = await supabase.from('share_data').insert([{ content, type: 'code' }]);
-            if(!error) {
-                input.value = '';
-                input.style.height = 'auto';
+        // Handle Keyboard Shortcuts
+        function handleKeyDown(event) {
+            // If Enter is pressed
+            if (event.key === 'Enter') {
+                // If an image is pending, Enter SENDS it immediately
+                if (pendingImageBlob) {
+                    event.preventDefault();
+                    handleSend();
+                } 
+                // If NO image is pending, Enter defaults to a new line (standard textarea behavior)
+                // This allows the user to paste multi-line code easily.
             }
         }
 
-        async function uploadImage(input) {
-            if (!input.files || input.files.length === 0 || !supabase) return;
-            const file = input.files[0];
-            const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+        async function handleSend() {
+            const input = document.getElementById('code-input');
+            const textContent = input.value.trim();
+
+            if (pendingImageBlob) {
+                updateStatus("Uploading image...", "amber");
+                await uploadImage(pendingImageBlob);
+                clearPendingImage();
+                updateStatus("online", "green");
+            } else if (textContent) {
+                const { error } = await supabase.from('share_data').insert([{ content: textContent, type: 'code' }]);
+                if(!error) {
+                    input.value = '';
+                    input.style.height = 'auto';
+                }
+            }
+        }
+
+        function setupPasteListener() {
+            document.addEventListener('paste', async (event) => {
+                const items = (event.clipboardData || event.originalEvent.clipboardData).items;
+                for (let index in items) {
+                    const item = items[index];
+                    if (item.kind === 'file' && item.type.startsWith('image/')) {
+                        const blob = item.getAsFile();
+                        if (blob) {
+                            showImagePreview(blob);
+                        }
+                    }
+                }
+            });
+        }
+
+        function handleFileSelect(file) {
+            if (file) showImagePreview(file);
+        }
+
+        function showImagePreview(blob) {
+            pendingImageBlob = blob;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('image-preview').src = e.target.result;
+                document.getElementById('preview-container').style.display = 'flex';
+                document.getElementById('preview-filename').textContent = blob.name || 'pasted_image.png';
+                // Focus textarea so user can press Enter to send
+                document.getElementById('code-input').focus();
+            };
+            reader.readAsDataURL(blob);
+        }
+
+        function clearPendingImage() {
+            pendingImageBlob = null;
+            document.getElementById('preview-container').style.display = 'none';
+            document.getElementById('image-preview').src = '';
+            document.getElementById('image-input').value = '';
+        }
+
+        async function uploadImage(file) {
+            if (!file || !supabase) return;
+            const fileName = `${Date.now()}-${file.name ? file.name.replace(/[^a-zA-Z0-9.]/g, '_') : 'pasted_image.png'}`;
 
             try {
                 const { error: uploadError } = await supabase.storage.from(BUCKET_NAME).upload(fileName, file);
@@ -176,10 +263,8 @@
             const today = new Date();
             const yesterday = new Date();
             yesterday.setDate(today.getDate() - 1);
-
             if (date.toDateString() === today.toDateString()) return "Today";
             if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
-            
             return date.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
         }
 
@@ -201,11 +286,9 @@
             const row = document.createElement('div');
             row.id = `item-${item.id}`;
             row.className = "fade-in flex flex-col items-start w-full mb-2";
-            
             const time = msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             let contentHtml = '';
-
             if(item.type === 'code') {
                 contentHtml = `
                     <div class="flex justify-between items-center mb-1 border-b border-gray-100 pb-1">
@@ -220,8 +303,6 @@
                 contentHtml = `
                     <div class="image-wrapper relative group overflow-hidden rounded-lg">
                         <img src="${item.content}" class="max-w-full h-auto border border-gray-100 cursor-pointer block" onclick="window.open('${item.content}')">
-                        
-                        <!-- Bezel Download Button Overlay -->
                         <div class="download-overlay absolute inset-0 flex items-end justify-end p-2">
                              <button onclick="event.stopPropagation(); downloadImage('${item.content}', 'image-${item.id}.png')" 
                                      class="bezel-download bg-white/90 hover:bg-white text-gray-800 p-2 rounded-full shadow-lg border border-gray-200" 
@@ -245,7 +326,6 @@
                     </div>
                 </div>
             `;
-
             feed.appendChild(row);
         }
 
