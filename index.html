@@ -178,16 +178,12 @@
 
         // Handle Keyboard Shortcuts
         function handleKeyDown(event) {
-            // If Enter is pressed
-            if (event.key === 'Enter') {
-                // If an image is pending, Enter SENDS it immediately
-                if (pendingImageBlob) {
-                    event.preventDefault();
-                    handleSend();
-                } 
-                // If NO image is pending, Enter defaults to a new line (standard textarea behavior)
-                // This allows the user to paste multi-line code easily.
+            // Check if Enter is pressed without Shift
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault(); // Prevents new line in textarea
+                handleSend(); // Sends both text or pending image
             }
+            // Shift + Enter still allows for new lines
         }
 
         async function handleSend() {
@@ -199,6 +195,9 @@
                 await uploadImage(pendingImageBlob);
                 clearPendingImage();
                 updateStatus("online", "green");
+                // Also clear the text if there was any
+                input.value = '';
+                input.style.height = 'auto';
             } else if (textContent) {
                 const { error } = await supabase.from('share_data').insert([{ content: textContent, type: 'code' }]);
                 if(!error) {
