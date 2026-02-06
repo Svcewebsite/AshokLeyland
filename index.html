@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AL Dev Porter - Chat</title>
+    <title>AL Dev Porter - Multi-Tool</title>
     <!-- Supabase Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.1/dist/umd/supabase.js" crossorigin="anonymous"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -14,32 +14,19 @@
         .fade-in { animation: fadeIn 0.2s ease-in; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
-        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-thumb { background: #ced0d1; border-radius: 10px; }
         
-        /* WhatsApp Bubbles */
         .bubble-in { background: white; border-radius: 0 12px 12px 12px; position: relative; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); }
         .bubble-in::before { content: ''; position: absolute; left: -8px; top: 0; border-width: 0 8px 10px 0; border-color: transparent white transparent transparent; }
 
-        /* Date Divider */
         .date-divider { margin: 16px 0; display: flex; justify-content: center; position: relative; }
         .date-badge { background: #ffffff; color: #54656f; font-size: 11.5px; padding: 6px 14px; border-radius: 8px; text-transform: uppercase; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); font-weight: 500; }
         
-        /* Interactive Elements */
-        .download-overlay { 
-            background: linear-gradient(transparent, rgba(0,0,0,0.4));
-            opacity: 0;
-            transition: opacity 0.2s ease;
-        }
-        .image-wrapper:hover .download-overlay { opacity: 1; }
+        .download-overlay { background: linear-gradient(transparent, rgba(0,0,0,0.4)); opacity: 0; transition: opacity 0.2s ease; pointer-events: none; }
+        .media-wrapper:hover .download-overlay { opacity: 1; }
+        .download-btn { pointer-events: auto; }
         
-        .bezel-download {
-            transition: transform 0.1s ease;
-        }
-        .bezel-download:active { transform: scale(0.9); }
-
-        /* Preview Area */
         #preview-container {
             display: none;
             position: absolute;
@@ -57,12 +44,11 @@
 </head>
 <body class="h-screen flex flex-col overflow-hidden">
     
-    <!-- Header -->
     <header class="bg-[#f0f2f5] border-b border-gray-300 px-4 py-2 flex items-center justify-between z-10">
         <div class="flex items-center gap-3">
             <div class="w-10 h-10 bg-[#002855] rounded-full flex items-center justify-center text-white font-bold shadow-sm">AL</div>
             <div>
-                <h1 class="font-semibold text-gray-800 text-sm">Project Porter (Live Sync)</h1>
+                <h1 class="font-semibold text-gray-800 text-sm">Project Porter (All-Files)</h1>
                 <div id="status" class="text-[11px] text-gray-500 flex items-center gap-1">
                     <span class="w-2 h-2 rounded-full bg-amber-500"></span>
                     Initializing...
@@ -71,39 +57,42 @@
         </div>
     </header>
 
-    <!-- Main Chat Area -->
     <main class="flex-1 overflow-y-auto chat-bg p-4 md:px-20 lg:px-40" id="chat-container">
         <div class="flex flex-col gap-4" id="feed">
             <div id="empty-state" class="flex flex-col items-center justify-center py-20 text-gray-500">
-                <div class="bg-white/80 px-4 py-1 rounded-full text-xs shadow-sm mb-4 uppercase">Messages are transient within this network</div>
-                <p class="text-sm italic">Paste an image or snippet to share...</p>
+                <p class="text-sm italic">Paste code, images, videos, or drop files here...</p>
             </div>
         </div>
     </main>
 
-    <!-- Input Bar -->
     <footer class="bg-[#f0f2f5] p-3 border-t border-gray-300 relative">
-        <!-- Image Preview Area -->
+        <!-- Unified File Preview Area -->
         <div id="preview-container" class="flex items-center gap-4">
-            <div class="relative w-20 h-20 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
-                <img id="image-preview" src="" class="w-full h-full object-cover">
-                <button onclick="clearPendingImage()" class="absolute top-0 right-0 bg-red-500 text-white rounded-bl-lg p-1 hover:bg-red-600">
+            <div id="preview-box" class="relative w-20 h-20 bg-gray-100 rounded-lg overflow-hidden border border-gray-200 flex items-center justify-center">
+                <img id="image-preview" src="" class="hidden w-full h-full object-cover">
+                <div id="file-icon-preview" class="hidden text-gray-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                </div>
+                <button onclick="clearPendingFile()" class="absolute top-0 right-0 bg-red-500 text-white rounded-bl-lg p-1 hover:bg-red-600">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
             </div>
-            <div class="text-xs text-gray-500 italic" id="preview-filename">image_to_upload.png</div>
+            <div class="text-xs text-gray-500 flex flex-col">
+                <span id="preview-filename" class="font-bold text-gray-700 truncate max-w-[200px]">filename.zip</span>
+                <span id="preview-filesize" class="italic">0 KB</span>
+            </div>
         </div>
 
         <div class="max-w-5xl mx-auto flex items-end gap-3">
             <label class="p-2 text-gray-600 hover:bg-gray-200 rounded-full cursor-pointer transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
-                <input type="file" id="image-input" class="hidden" accept="image/*" onchange="handleFileSelect(this.files[0])">
+                <input type="file" id="file-input" class="hidden" onchange="handleFileSelect(this.files[0])">
             </label>
 
             <div class="flex-1 relative">
-                <textarea id="code-input" rows="1" 
+                <textarea id="main-input" rows="1" 
                     class="w-full bg-white border-none rounded-xl px-4 py-3 text-sm focus:ring-0 focus:outline-none shadow-sm resize-none transition-all" 
-                    placeholder="Paste code or image here..."
+                    placeholder="Message or paste any file..."
                     onkeydown="handleKeyDown(event)"
                     oninput="this.style.height = '';this.style.height = Math.min(this.scrollHeight, 200) + 'px'"></textarea>
             </div>
@@ -121,40 +110,29 @@
 
         let supabase;
         let lastRenderedDate = null; 
-        let pendingImageBlob = null; 
+        let pendingFile = null; 
 
         function startApp() {
-            try {
-                const lib = window.supabase;
-                if (!lib || !lib.createClient) {
-                    setTimeout(startApp, 200);
-                    return;
-                }
-                supabase = lib.createClient(SUPABASE_URL, SUPABASE_KEY);
-                if (supabase) {
-                    updateStatus("online", "green");
-                    fetchInitialData();
-                    subscribeRealtime();
-                    setupPasteListener();
-                }
-            } catch (err) {
-                updateStatus("offline", "red");
+            const lib = window.supabase;
+            if (!lib || !lib.createClient) { setTimeout(startApp, 200); return; }
+            supabase = lib.createClient(SUPABASE_URL, SUPABASE_KEY);
+            if (supabase) {
+                updateStatus("online", "green");
+                fetchInitialData();
+                subscribeRealtime();
+                setupUniversalPaste();
             }
         }
-
         document.addEventListener('DOMContentLoaded', startApp);
 
         function updateStatus(text, color) {
             const statusEl = document.getElementById('status');
-            if (!statusEl) return;
-            statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-${color}-500"></span> ${text}`;
+            if (statusEl) statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-${color}-500"></span> ${text}`;
         }
 
         async function fetchInitialData() {
-            if (!supabase) return;
-            const { data, error } = await supabase.from('share_data').select('*').order('created_at', { ascending: true }).limit(200);
+            const { data, error } = await supabase.from('share_data').select('*').order('created_at', { ascending: true }).limit(100);
             if (!error && data) {
-                const feed = document.getElementById('feed');
                 const empty = document.getElementById('empty-state');
                 if(data.length > 0 && empty) empty.remove();
                 data.forEach(item => renderItem(item));
@@ -163,108 +141,99 @@
         }
 
         function subscribeRealtime() {
-            if (!supabase) return;
-            supabase.channel('porter-sync').on('postgres_changes', { event: '*', schema: 'public', table: 'share_data' }, payload => {
-                if (payload.eventType === 'INSERT') {
-                    const empty = document.getElementById('empty-state');
-                    if(empty) empty.remove();
-                    renderItem(payload.new);
-                    scrollToBottom();
-                } else if (payload.eventType === 'DELETE') {
-                    location.reload();
-                }
+            supabase.channel('porter-sync-all').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'share_data' }, payload => {
+                const empty = document.getElementById('empty-state');
+                if(empty) empty.remove();
+                renderItem(payload.new);
+                scrollToBottom();
             }).subscribe();
         }
 
-        // Handle Keyboard Shortcuts
         function handleKeyDown(event) {
-            // Check if Enter is pressed without Shift
             if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault(); // Prevents new line in textarea
-                handleSend(); // Sends both text or pending image
+                event.preventDefault();
+                handleSend();
             }
-            // Shift + Enter still allows for new lines
         }
 
         async function handleSend() {
-            const input = document.getElementById('code-input');
+            const input = document.getElementById('main-input');
             const textContent = input.value.trim();
 
-            if (pendingImageBlob) {
-                updateStatus("Uploading image...", "amber");
-                await uploadImage(pendingImageBlob);
-                clearPendingImage();
+            if (pendingFile) {
+                updateStatus("Uploading...", "amber");
+                await uploadAnyFile(pendingFile);
+                clearPendingFile();
                 updateStatus("online", "green");
-                // Also clear the text if there was any
-                input.value = '';
-                input.style.height = 'auto';
             } else if (textContent) {
-                const { error } = await supabase.from('share_data').insert([{ content: textContent, type: 'code' }]);
-                if(!error) {
-                    input.value = '';
-                    input.style.height = 'auto';
-                }
+                await supabase.from('share_data').insert([{ content: textContent, type: 'code' }]);
             }
+            input.value = '';
+            input.style.height = 'auto';
         }
 
-        function setupPasteListener() {
-            document.addEventListener('paste', async (event) => {
-                const items = (event.clipboardData || event.originalEvent.clipboardData).items;
-                for (let index in items) {
-                    const item = items[index];
-                    if (item.kind === 'file' && item.type.startsWith('image/')) {
-                        const blob = item.getAsFile();
-                        if (blob) {
-                            showImagePreview(blob);
-                        }
+        function setupUniversalPaste() {
+            document.addEventListener('paste', (e) => {
+                const items = e.clipboardData.items;
+                for (let item of items) {
+                    if (item.kind === 'file') {
+                        handleFileSelect(item.getAsFile());
+                        break;
                     }
                 }
             });
         }
 
         function handleFileSelect(file) {
-            if (file) showImagePreview(file);
+            if (!file) return;
+            pendingFile = file;
+            const container = document.getElementById('preview-container');
+            const imgPreview = document.getElementById('image-preview');
+            const iconPreview = document.getElementById('file-icon-preview');
+            
+            document.getElementById('preview-filename').textContent = file.name;
+            document.getElementById('preview-filesize').textContent = (file.size / 1024).toFixed(1) + " KB";
+            container.style.display = 'flex';
+
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    imgPreview.src = e.target.result;
+                    imgPreview.classList.remove('hidden');
+                    iconPreview.classList.add('hidden');
+                };
+                reader.readAsDataURL(file);
+            } else {
+                imgPreview.classList.add('hidden');
+                iconPreview.classList.remove('hidden');
+            }
+            document.getElementById('main-input').focus();
         }
 
-        function showImagePreview(blob) {
-            pendingImageBlob = blob;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                document.getElementById('image-preview').src = e.target.result;
-                document.getElementById('preview-container').style.display = 'flex';
-                document.getElementById('preview-filename').textContent = blob.name || 'pasted_image.png';
-                // Focus textarea so user can press Enter to send
-                document.getElementById('code-input').focus();
-            };
-            reader.readAsDataURL(blob);
-        }
-
-        function clearPendingImage() {
-            pendingImageBlob = null;
+        function clearPendingFile() {
+            pendingFile = null;
             document.getElementById('preview-container').style.display = 'none';
-            document.getElementById('image-preview').src = '';
-            document.getElementById('image-input').value = '';
+            document.getElementById('file-input').value = '';
         }
 
-        async function uploadImage(file) {
-            if (!file || !supabase) return;
-            const fileName = `${Date.now()}-${file.name ? file.name.replace(/[^a-zA-Z0-9.]/g, '_') : 'pasted_image.png'}`;
+        async function uploadAnyFile(file) {
+            const ext = file.name.split('.').pop().toLowerCase();
+            const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+            
+            let fileType = 'file';
+            if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) fileType = 'image';
+            else if (['mp4', 'webm', 'ogg', 'mov'].includes(ext)) fileType = 'video';
 
-            try {
-                const { error: uploadError } = await supabase.storage.from(BUCKET_NAME).upload(fileName, file);
-                if (uploadError) return;
-                const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
-                await supabase.from('share_data').insert([{ content: data.publicUrl, type: 'image' }]);
-            } catch (err) {}
-        }
+            const { error: uploadError } = await supabase.storage.from(BUCKET_NAME).upload(fileName, file);
+            if (uploadError) return;
 
-        function formatHeaderDate(date) {
-            const today = new Date();
-            const yesterday = new Date();
-            yesterday.setDate(today.getDate() - 1);
-            if (date.toDateString() === today.toDateString()) return "Today";
-            if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
-            return date.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+            const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
+            // We store a JSON object for files to keep original name
+            const dbContent = fileType === 'file' 
+                ? JSON.stringify({ url: data.publicUrl, name: file.name, size: file.size })
+                : data.publicUrl;
+
+            await supabase.from('share_data').insert([{ content: dbContent, type: fileType }]);
         }
 
         function renderItem(item) {
@@ -272,100 +241,86 @@
             if (!feed || document.getElementById(`item-${item.id}`)) return;
 
             const msgDate = new Date(item.created_at);
-            const dateKey = msgDate.toDateString();
-
-            if (lastRenderedDate !== dateKey) {
+            if (lastRenderedDate !== msgDate.toDateString()) {
                 const divider = document.createElement('div');
                 divider.className = "date-divider";
-                divider.innerHTML = `<span class="date-badge">${formatHeaderDate(msgDate)}</span>`;
+                divider.innerHTML = `<span class="date-badge">${msgDate.toLocaleDateString()}</span>`;
                 feed.appendChild(divider);
-                lastRenderedDate = dateKey;
+                lastRenderedDate = msgDate.toDateString();
             }
 
             const row = document.createElement('div');
             row.id = `item-${item.id}`;
-            row.className = "fade-in flex flex-col items-start w-full mb-2";
+            row.className = "fade-in flex flex-col items-start w-full mb-3";
             const time = msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            let contentHtml = '';
-            if(item.type === 'code') {
-                contentHtml = `
-                    <div class="flex justify-between items-center mb-1 border-b border-gray-100 pb-1">
-                        <span class="text-[10px] text-blue-500 font-bold uppercase">Code Snippet</span>
-                        <div class="flex gap-2">
-                            <button onclick="copyToClipboard(this)" class="text-[10px] text-gray-400 hover:text-blue-600 px-1">Copy</button>
-                        </div>
+            let innerHtml = '';
+            if (item.type === 'code') {
+                innerHtml = `<pre class="text-[13px] text-gray-800 font-mono">${escapeHtml(item.content)}</pre>`;
+            } else if (item.type === 'image') {
+                innerHtml = `<div class="media-wrapper relative group rounded-lg overflow-hidden">
+                    <img src="${item.content}" class="max-w-full h-auto cursor-pointer" onclick="window.open('${item.content}')">
+                    <div class="download-overlay absolute inset-0 flex items-end justify-end p-2">
+                        <button onclick="downloadResource('${item.content}')" class="download-btn bg-white p-2 rounded-full shadow-lg hover:bg-gray-100 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        </button>
                     </div>
-                    <pre class="text-[13px] text-gray-800 leading-tight font-mono">${escapeHtml(item.content)}</pre>
-                `;
+                </div>`;
+            } else if (item.type === 'video') {
+                innerHtml = `<div class="media-wrapper relative group rounded-lg overflow-hidden w-full max-w-sm">
+                    <video controls class="w-full rounded-lg shadow-sm block">
+                        <source src="${item.content}">
+                    </video>
+                    <div class="download-overlay absolute inset-0 flex items-start justify-end p-2 pointer-events-none">
+                        <button onclick="downloadResource('${item.content}', 'video-${item.id}.mp4')" class="download-btn bg-white/90 p-2 rounded-full shadow-lg hover:bg-white transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        </button>
+                    </div>
+                </div>`;
             } else {
-                contentHtml = `
-                    <div class="image-wrapper relative group overflow-hidden rounded-lg">
-                        <img src="${item.content}" class="max-w-full h-auto border border-gray-100 cursor-pointer block" onclick="window.open('${item.content}')">
-                        <div class="download-overlay absolute inset-0 flex items-end justify-end p-2">
-                             <button onclick="event.stopPropagation(); downloadImage('${item.content}', 'image-${item.id}.png')" 
-                                     class="bezel-download bg-white/90 hover:bg-white text-gray-800 p-2 rounded-full shadow-lg border border-gray-200" 
-                                     title="Download Image">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
-                            </button>
-                        </div>
+                const fileData = JSON.parse(item.content);
+                innerHtml = `<div class="flex items-center gap-3 p-2 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-100" onclick="downloadResource('${fileData.url}', '${fileData.name}')">
+                    <div class="bg-blue-100 p-2 rounded text-blue-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                     </div>
-                `;
+                    <div class="flex flex-col overflow-hidden">
+                        <span class="text-sm font-semibold truncate max-w-[150px]">${fileData.name}</span>
+                        <span class="text-[10px] text-gray-400 uppercase">${(fileData.size/1024).toFixed(1)} KB</span>
+                    </div>
+                </div>`;
             }
 
-            row.innerHTML = `
-                <div class="flex items-end w-full">
-                    <div class="bubble-in max-w-[85%] md:max-w-[70%] p-2 pb-1 pr-3">
-                        ${contentHtml}
-                        <div class="flex items-center justify-end gap-2 mt-1">
-                            <div class="text-[10px] text-gray-400 leading-none">${time}</div>
-                        </div>
-                    </div>
-                </div>
-            `;
+            row.innerHTML = `<div class="bubble-in p-2 pr-3 min-w-[120px] max-w-[85%]">
+                ${innerHtml}
+                <div class="text-[10px] text-gray-400 text-right mt-1">${time}</div>
+            </div>`;
             feed.appendChild(row);
         }
 
         function scrollToBottom() {
-            const container = document.getElementById('chat-container');
-            container.scrollTop = container.scrollHeight;
+            const c = document.getElementById('chat-container');
+            c.scrollTop = c.scrollHeight;
         }
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+        function escapeHtml(t) {
+            const d = document.createElement('div');
+            d.textContent = t;
+            return d.innerHTML;
         }
 
-        function copyToClipboard(btn) {
-            const text = btn.closest('.bubble-in').querySelector('pre').innerText;
-            const el = document.createElement('textarea');
-            el.value = text;
-            document.body.appendChild(el);
-            el.select();
-            document.execCommand('copy');
-            document.body.removeChild(el);
-            btn.innerText = "Done!";
-            setTimeout(() => btn.innerText = "Copy", 2000);
-        }
-
-        async function downloadImage(url, filename) {
+        async function downloadResource(url, filename = 'download') {
             try {
-                const response = await fetch(url);
-                const blob = await response.blob();
-                const blobUrl = window.URL.createObjectURL(blob);
+                const res = await fetch(url);
+                const blob = await res.blob();
+                const bUrl = URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                a.href = blobUrl;
+                a.href = bUrl;
                 a.download = filename;
                 document.body.appendChild(a);
                 a.click();
-                window.URL.revokeObjectURL(blobUrl);
                 document.body.removeChild(a);
-            } catch (err) {
-                window.open(url, '_blank');
-            }
+                URL.revokeObjectURL(bUrl);
+            } catch (e) { window.open(url); }
         }
     </script>
 </body>
