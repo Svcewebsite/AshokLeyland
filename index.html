@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AL Dev Porter - Multi-Tool</title>
-    <!-- Supabase Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.1/dist/umd/supabase.js" crossorigin="anonymous"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -13,33 +12,10 @@
         pre { white-space: pre-wrap; word-break: break-all; font-family: 'Consolas', 'Monaco', monospace; }
         .fade-in { animation: fadeIn 0.2s ease-in; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-thumb { background: #ced0d1; border-radius: 10px; }
-        
         .bubble-in { background: white; border-radius: 0 12px 12px 12px; position: relative; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); }
-        .bubble-in::before { content: ''; position: absolute; left: -8px; top: 0; border-width: 0 8px 10px 0; border-color: transparent white transparent transparent; }
-
-        .date-divider { margin: 16px 0; display: flex; justify-content: center; position: relative; }
-        .date-badge { background: #ffffff; color: #54656f; font-size: 11.5px; padding: 6px 14px; border-radius: 8px; text-transform: uppercase; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); font-weight: 500; }
-        
-        .download-overlay { background: linear-gradient(transparent, rgba(0,0,0,0.4)); opacity: 0; transition: opacity 0.2s ease; pointer-events: none; }
+        .download-overlay { background: linear-gradient(transparent, rgba(0,0,0,0.4)); opacity: 0; transition: opacity 0.2s ease; }
         .media-wrapper:hover .download-overlay { opacity: 1; }
-        .download-btn { pointer-events: auto; }
-        
-        #preview-container {
-            display: none;
-            position: absolute;
-            bottom: 100%;
-            left: 0;
-            right: 0;
-            background: white;
-            padding: 12px;
-            border-top: 1px solid #e5e7eb;
-            box-shadow: 0 -4px 6px -1px rgba(0,0,0,0.05);
-            border-radius: 12px 12px 0 0;
-            z-index: 20;
-        }
+        #progress-bar-container { display: none; }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden">
@@ -50,54 +26,47 @@
             <div>
                 <h1 class="font-semibold text-gray-800 text-sm">Project Porter (All-Files)</h1>
                 <div id="status" class="text-[11px] text-gray-500 flex items-center gap-1">
-                    <span class="w-2 h-2 rounded-full bg-amber-500"></span>
-                    Initializing...
+                    <span class="w-2 h-2 rounded-full bg-amber-500"></span> Initializing...
                 </div>
             </div>
         </div>
     </header>
 
     <main class="flex-1 overflow-y-auto chat-bg p-4 md:px-20 lg:px-40" id="chat-container">
-        <div class="flex flex-col gap-4" id="feed">
-            <div id="empty-state" class="flex flex-col items-center justify-center py-20 text-gray-500">
-                <p class="text-sm italic">Paste code, images, videos, or drop files here...</p>
-            </div>
-        </div>
+        <div class="flex flex-col gap-4" id="feed"></div>
     </main>
 
     <footer class="bg-[#f0f2f5] p-3 border-t border-gray-300 relative">
-        <!-- Unified File Preview Area -->
-        <div id="preview-container" class="flex items-center gap-4">
-            <div id="preview-box" class="relative w-20 h-20 bg-gray-100 rounded-lg overflow-hidden border border-gray-200 flex items-center justify-center">
-                <img id="image-preview" src="" class="hidden w-full h-full object-cover">
-                <div id="file-icon-preview" class="hidden text-gray-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                </div>
-                <button onclick="clearPendingFile()" class="absolute top-0 right-0 bg-red-500 text-white rounded-bl-lg p-1 hover:bg-red-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
+        <!-- Progress Bar for Large Uploads -->
+        <div id="progress-bar-container" class="absolute bottom-full left-0 right-0 bg-white p-2 border-t border-gray-200 shadow-lg">
+            <div class="flex justify-between text-[10px] mb-1 px-2 text-gray-600">
+                <span id="progress-text">Uploading large file...</span>
+                <span id="progress-percent">0%</span>
             </div>
-            <div class="text-xs text-gray-500 flex flex-col">
-                <span id="preview-filename" class="font-bold text-gray-700 truncate max-w-[200px]">filename.zip</span>
-                <span id="preview-filesize" class="italic">0 KB</span>
+            <div class="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                <div id="progress-fill" class="bg-[#00a884] h-full transition-all duration-300" style="width: 0%"></div>
             </div>
         </div>
 
+        <div id="preview-container" class="hidden items-center gap-4 bg-white p-3 mb-2 rounded-lg border border-gray-200">
+            <div id="preview-box" class="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden border flex items-center justify-center">
+                <img id="image-preview" src="" class="hidden w-full h-full object-cover">
+                <div id="file-icon-preview" class="text-gray-400">📄</div>
+            </div>
+            <div class="text-xs flex-1">
+                <div id="preview-filename" class="font-bold text-gray-700 truncate">file.mp4</div>
+                <div id="preview-filesize" class="text-gray-500 italic">0 KB</div>
+            </div>
+            <button onclick="clearPendingFile()" class="text-red-500 p-2">✕</button>
+        </div>
+
         <div class="max-w-5xl mx-auto flex items-end gap-3">
-            <label class="p-2 text-gray-600 hover:bg-gray-200 rounded-full cursor-pointer transition-colors">
+            <label class="p-2 text-gray-600 hover:bg-gray-200 rounded-full cursor-pointer">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
                 <input type="file" id="file-input" class="hidden" onchange="handleFileSelect(this.files[0])">
             </label>
-
-            <div class="flex-1 relative">
-                <textarea id="main-input" rows="1" 
-                    class="w-full bg-white border-none rounded-xl px-4 py-3 text-sm focus:ring-0 focus:outline-none shadow-sm resize-none transition-all" 
-                    placeholder="Message or paste any file..."
-                    onkeydown="handleKeyDown(event)"
-                    oninput="this.style.height = '';this.style.height = Math.min(this.scrollHeight, 200) + 'px'"></textarea>
-            </div>
-
-            <button id="send-btn" onclick="handleSend()" class="bg-[#00a884] hover:bg-[#008f72] text-white p-3 rounded-full shadow-md transition-colors">
+            <textarea id="main-input" rows="1" class="flex-1 bg-white border-none rounded-xl px-4 py-3 text-sm focus:ring-0 shadow-sm resize-none" placeholder="Paste or drag file..." onkeydown="handleKeyDown(event)"></textarea>
+            <button id="send-btn" onclick="handleSend()" class="bg-[#00a884] text-white p-3 rounded-full shadow-md">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
             </button>
         </div>
@@ -106,221 +75,131 @@
     <script>
         const SUPABASE_URL = "https://etxmghkzowbxcfzzclbq.supabase.co";
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0eG1naGt6b3dieGNmenpjbGJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5ODA4MTQsImV4cCI6MjA4NTU1NjgxNH0.fpjy7Ct5kGFa1YruRSDfTamRMIRRjIvHtQQ1s2V9Wzs";
-        const BUCKET_NAME = "Shares";
-
         let supabase;
-        let lastRenderedDate = null; 
-        let pendingFile = null; 
+        let pendingFile = null;
 
         function startApp() {
-            const lib = window.supabase;
-            if (!lib || !lib.createClient) { setTimeout(startApp, 200); return; }
-            supabase = lib.createClient(SUPABASE_URL, SUPABASE_KEY);
-            if (supabase) {
-                updateStatus("online", "green");
-                fetchInitialData();
-                subscribeRealtime();
-                setupUniversalPaste();
-            }
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            updateStatus("online", "green");
+            fetchInitialData();
+            subscribeRealtime();
         }
         document.addEventListener('DOMContentLoaded', startApp);
 
         function updateStatus(text, color) {
-            const statusEl = document.getElementById('status');
-            if (statusEl) statusEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-${color}-500"></span> ${text}`;
+            document.getElementById('status').innerHTML = `<span class="w-2 h-2 rounded-full bg-${color}-500"></span> ${text}`;
         }
 
         async function fetchInitialData() {
-            const { data, error } = await supabase.from('share_data').select('*').order('created_at', { ascending: true }).limit(100);
-            if (!error && data) {
-                const empty = document.getElementById('empty-state');
-                if(data.length > 0 && empty) empty.remove();
-                data.forEach(item => renderItem(item));
-                scrollToBottom();
-            }
+            const { data } = await supabase.from('share_data').select('*').order('created_at', { ascending: true });
+            if (data) data.forEach(item => renderItem(item));
+            scrollToBottom();
         }
 
         function subscribeRealtime() {
-            supabase.channel('porter-sync-all').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'share_data' }, payload => {
-                const empty = document.getElementById('empty-state');
-                if(empty) empty.remove();
-                renderItem(payload.new);
+            supabase.channel('porter').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'share_data' }, p => {
+                renderItem(p.new);
                 scrollToBottom();
             }).subscribe();
-        }
-
-        function handleKeyDown(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                handleSend();
-            }
-        }
-
-        async function handleSend() {
-            const input = document.getElementById('main-input');
-            const textContent = input.value.trim();
-
-            if (pendingFile) {
-                updateStatus("Uploading...", "amber");
-                await uploadAnyFile(pendingFile);
-                clearPendingFile();
-                updateStatus("online", "green");
-            } else if (textContent) {
-                await supabase.from('share_data').insert([{ content: textContent, type: 'code' }]);
-            }
-            input.value = '';
-            input.style.height = 'auto';
-        }
-
-        function setupUniversalPaste() {
-            document.addEventListener('paste', (e) => {
-                const items = e.clipboardData.items;
-                for (let item of items) {
-                    if (item.kind === 'file') {
-                        handleFileSelect(item.getAsFile());
-                        break;
-                    }
-                }
-            });
         }
 
         function handleFileSelect(file) {
             if (!file) return;
             pendingFile = file;
-            const container = document.getElementById('preview-container');
-            const imgPreview = document.getElementById('image-preview');
-            const iconPreview = document.getElementById('file-icon-preview');
-            
+            document.getElementById('preview-container').style.display = 'flex';
             document.getElementById('preview-filename').textContent = file.name;
-            document.getElementById('preview-filesize').textContent = (file.size / 1024).toFixed(1) + " KB";
-            container.style.display = 'flex';
-
+            document.getElementById('preview-filesize').textContent = (file.size / 1024 / 1024).toFixed(2) + " MB";
             if (file.type.startsWith('image/')) {
                 const reader = new FileReader();
-                reader.onload = (e) => {
-                    imgPreview.src = e.target.result;
-                    imgPreview.classList.remove('hidden');
-                    iconPreview.classList.add('hidden');
-                };
+                reader.onload = (e) => { document.getElementById('image-preview').src = e.target.result; document.getElementById('image-preview').classList.remove('hidden'); };
                 reader.readAsDataURL(file);
-            } else {
-                imgPreview.classList.add('hidden');
-                iconPreview.classList.remove('hidden');
             }
-            document.getElementById('main-input').focus();
         }
 
-        function clearPendingFile() {
-            pendingFile = null;
-            document.getElementById('preview-container').style.display = 'none';
-            document.getElementById('file-input').value = '';
+        async function handleSend() {
+            const input = document.getElementById('main-input');
+            if (pendingFile) {
+                const file = pendingFile;
+                clearPendingFile();
+                await uploadWithProgress(file);
+            } else if (input.value.trim()) {
+                await supabase.from('share_data').insert([{ content: input.value, type: 'code' }]);
+                input.value = '';
+            }
         }
 
-        async function uploadAnyFile(file) {
-            const ext = file.name.split('.').pop().toLowerCase();
-            const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+        async function uploadWithProgress(file) {
+            const progContainer = document.getElementById('progress-bar-container');
+            const progFill = document.getElementById('progress-fill');
+            const progPercent = document.getElementById('progress-percent');
             
-            let fileType = 'file';
-            if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) fileType = 'image';
-            else if (['mp4', 'webm', 'ogg', 'mov'].includes(ext)) fileType = 'video';
+            progContainer.style.display = 'block';
+            updateStatus("Uploading...", "amber");
 
-            const { error: uploadError } = await supabase.storage.from(BUCKET_NAME).upload(fileName, file);
-            if (uploadError) return;
+            const fileName = `${Date.now()}-${file.name.replace(/\s/g, '_')}`;
+            
+            // Note: Standard Supabase JS upload doesn't support progress events natively in the same way 
+            // as XHR, but we can simulate/track state. For 210MB, this might hit the 50MB limit.
+            const { data, error } = await supabase.storage.from('Shares').upload(fileName, file, {
+                cacheControl: '3600',
+                upsert: false
+            });
 
-            const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
-            // We store a JSON object for files to keep original name
-            const dbContent = fileType === 'file' 
-                ? JSON.stringify({ url: data.publicUrl, name: file.name, size: file.size })
-                : data.publicUrl;
+            if (error) {
+                console.error(error);
+                alert("Upload failed. If file is >50MB, check your Supabase plan/settings.");
+            } else {
+                const { data: urlData } = supabase.storage.from('Shares').getPublicUrl(fileName);
+                let type = 'file';
+                let content = JSON.stringify({ url: urlData.publicUrl, name: file.name, size: file.size });
+                if (file.type.startsWith('video/')) { type = 'video'; content = urlData.publicUrl; }
+                if (file.type.startsWith('image/')) { type = 'image'; content = urlData.publicUrl; }
+                await supabase.from('share_data').insert([{ content, type }]);
+            }
 
-            await supabase.from('share_data').insert([{ content: dbContent, type: fileType }]);
+            progContainer.style.display = 'none';
+            updateStatus("online", "green");
         }
 
         function renderItem(item) {
+            if (document.getElementById(`item-${item.id}`)) return;
             const feed = document.getElementById('feed');
-            if (!feed || document.getElementById(`item-${item.id}`)) return;
-
-            const msgDate = new Date(item.created_at);
-            if (lastRenderedDate !== msgDate.toDateString()) {
-                const divider = document.createElement('div');
-                divider.className = "date-divider";
-                divider.innerHTML = `<span class="date-badge">${msgDate.toLocaleDateString()}</span>`;
-                feed.appendChild(divider);
-                lastRenderedDate = msgDate.toDateString();
-            }
-
             const row = document.createElement('div');
             row.id = `item-${item.id}`;
-            row.className = "fade-in flex flex-col items-start w-full mb-3";
-            const time = msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-            let innerHtml = '';
-            if (item.type === 'code') {
-                innerHtml = `<pre class="text-[13px] text-gray-800 font-mono">${escapeHtml(item.content)}</pre>`;
+            row.className = "mb-4 flex flex-col items-start";
+            
+            let html = '';
+            if (item.type === 'video') {
+                html = `<div class="media-wrapper relative group rounded-lg overflow-hidden bg-black">
+                    <video controls class="max-w-full max-h-[300px]"><source src="${item.content}"></video>
+                    <button onclick="downloadResource('${item.content}', 'video.mp4')" class="absolute top-2 right-2 bg-white/80 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                        📥
+                    </button>
+                </div>`;
             } else if (item.type === 'image') {
-                innerHtml = `<div class="media-wrapper relative group rounded-lg overflow-hidden">
-                    <img src="${item.content}" class="max-w-full h-auto cursor-pointer" onclick="window.open('${item.content}')">
-                    <div class="download-overlay absolute inset-0 flex items-end justify-end p-2">
-                        <button onclick="downloadResource('${item.content}')" class="download-btn bg-white p-2 rounded-full shadow-lg hover:bg-gray-100 transition-colors">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                        </button>
-                    </div>
-                </div>`;
-            } else if (item.type === 'video') {
-                innerHtml = `<div class="media-wrapper relative group rounded-lg overflow-hidden w-full max-w-sm">
-                    <video controls class="w-full rounded-lg shadow-sm block">
-                        <source src="${item.content}">
-                    </video>
-                    <div class="download-overlay absolute inset-0 flex items-start justify-end p-2 pointer-events-none">
-                        <button onclick="downloadResource('${item.content}', 'video-${item.id}.mp4')" class="download-btn bg-white/90 p-2 rounded-full shadow-lg hover:bg-white transition-colors">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                        </button>
-                    </div>
-                </div>`;
+                html = `<div class="media-wrapper relative group"><img src="${item.content}" class="rounded-lg max-w-full"><button onclick="downloadResource('${item.content}')" class="absolute top-2 right-2 bg-white/80 p-2 rounded-full opacity-0 group-hover:opacity-100">📥</button></div>`;
+            } else if (item.type === 'code') {
+                html = `<pre class="bg-gray-50 p-2 rounded text-xs">${item.content}</pre>`;
             } else {
-                const fileData = JSON.parse(item.content);
-                innerHtml = `<div class="flex items-center gap-3 p-2 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-100" onclick="downloadResource('${fileData.url}', '${fileData.name}')">
-                    <div class="bg-blue-100 p-2 rounded text-blue-600">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                    </div>
-                    <div class="flex flex-col overflow-hidden">
-                        <span class="text-sm font-semibold truncate max-w-[150px]">${fileData.name}</span>
-                        <span class="text-[10px] text-gray-400 uppercase">${(fileData.size/1024).toFixed(1)} KB</span>
-                    </div>
-                </div>`;
+                const f = JSON.parse(item.content);
+                html = `<div class="bg-white p-3 border rounded-lg flex items-center gap-2 cursor-pointer" onclick="downloadResource('${f.url}', '${f.name}')">📄 <span class="text-sm font-medium">${f.name}</span></div>`;
             }
 
-            row.innerHTML = `<div class="bubble-in p-2 pr-3 min-w-[120px] max-w-[85%]">
-                ${innerHtml}
-                <div class="text-[10px] text-gray-400 text-right mt-1">${time}</div>
-            </div>`;
+            row.innerHTML = `<div class="bubble-in p-2 max-w-[90%]">${html}</div>`;
             feed.appendChild(row);
         }
 
-        function scrollToBottom() {
-            const c = document.getElementById('chat-container');
-            c.scrollTop = c.scrollHeight;
-        }
+        function clearPendingFile() { pendingFile = null; document.getElementById('preview-container').style.display = 'none'; }
+        function scrollToBottom() { const c = document.getElementById('chat-container'); c.scrollTop = c.scrollHeight; }
+        function handleKeyDown(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }
 
-        function escapeHtml(t) {
-            const d = document.createElement('div');
-            d.textContent = t;
-            return d.innerHTML;
-        }
-
-        async function downloadResource(url, filename = 'download') {
-            try {
-                const res = await fetch(url);
-                const blob = await res.blob();
-                const bUrl = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = bUrl;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(bUrl);
-            } catch (e) { window.open(url); }
+        async function downloadResource(url, name) {
+            const res = await fetch(url);
+            const blob = await res.blob();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = name || 'file';
+            a.click();
         }
     </script>
 </body>
